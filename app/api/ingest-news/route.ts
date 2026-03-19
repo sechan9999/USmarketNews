@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { fetchNewsFromNewsAPI, fetchNewsFromFinnhub } from '@/lib/news/providers';
+import { fetchNewsFromNewsAPI, fetchNewsFromFinnhub, fetchNewsFromRSS } from '@/lib/news/providers';
 import { dedupeByUrlAndTitle } from '@/lib/news/dedupe';
 import { extractTickers, inferCategory } from '@/lib/news/normalize';
 import { scoreMarketImpact } from '@/lib/news/rank';
@@ -15,8 +15,9 @@ export async function GET() {
 
   const newsAPIArticles = await fetchNewsFromNewsAPI();
   const finnhubArticles = await fetchNewsFromFinnhub();
+  const rssArticles = await fetchNewsFromRSS();
   
-  const raw = [...newsAPIArticles, ...finnhubArticles];
+  const raw = [...newsAPIArticles, ...finnhubArticles, ...rssArticles];
   const unique = dedupeByUrlAndTitle(raw);
 
   const rows = unique.map((item) => {
@@ -48,7 +49,6 @@ export async function GET() {
     ignoreDuplicates: false,
   });
 
-
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
@@ -57,8 +57,8 @@ export async function GET() {
     ok: true, 
     newsAPI: newsAPIArticles.length,
     finnhub: finnhubArticles.length,
+    rss: rssArticles.length,
     totalUnique: unique.length,
     inserted: rows.length 
   });
 }
-

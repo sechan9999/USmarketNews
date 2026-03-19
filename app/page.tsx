@@ -572,7 +572,10 @@ function NewsPage({
                   </div>
 
                   <h2 className="text-2xl font-semibold leading-tight tracking-tight">{item.title}</h2>
-                  <p className="mt-3 text-sm leading-6 text-zinc-300">{item.summary}</p>
+                  <div 
+                    className="mt-3 text-sm leading-6 text-zinc-300 [&_ul]:list-disc [&_ul]:pl-5 [&_li]:mb-1 [&_a]:text-blue-400 [&_a:hover]:underline"
+                    dangerouslySetInnerHTML={{ __html: item.summary }}
+                  />
 
                   <div className="mt-4 flex flex-wrap items-center gap-2">
                     {item.impact.map((ticker: string) => (
@@ -1021,7 +1024,7 @@ function SettingsPage() {
         if (data.inserted > 0) {
           alert(`Success! Handled ${data.inserted} news items.`);
         } else {
-          alert(`Finished. 0 new items. (Sources: NewsAPI ${data.newsAPI || 0}, Finnhub ${data.finnhub || 0})`);
+          alert(`Finished. 0 new items. (Sources: NewsAPI ${data.newsAPI || 0}, Finnhub ${data.finnhub || 0}, RSS ${data.rss || 0})`);
         }
       } else {
         alert(`Error: ${data?.error || 'Unknown error. Check Vercel logs/keys.'}`);

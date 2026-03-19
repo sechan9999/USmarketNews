@@ -1,3 +1,5 @@
+import Parser from 'rss-parser';
+
 type RawNews = {
   id?: string;
   source: string;
@@ -7,6 +9,25 @@ type RawNews = {
   image?: string;
   publishedAt: string;
 };
+
+const rssParser = new Parser();
+
+export async function fetchNewsFromRSS(): Promise<RawNews[]> {
+  try {
+    const feed = await rssParser.parseURL('https://finance.yahoo.com/rss/topstories');
+    return feed.items.map((item: any) => ({
+      id: item.guid ?? item.link,
+      source: 'Yahoo Finance',
+      title: item.title ?? 'No title',
+      description: item.contentSnippet ?? item.content ?? '',
+      url: item.link ?? '',
+      publishedAt: item.isoDate ?? new Date().toISOString(),
+    }));
+  } catch (e) {
+    console.error('RSS fetch error', e);
+    return [];
+  }
+}
 
 export async function fetchNewsFromNewsAPI(): Promise<RawNews[]> {
   try {
@@ -30,11 +51,11 @@ export async function fetchNewsFromNewsAPI(): Promise<RawNews[]> {
           const data = await r.value.json();
           articles = articles.concat(data.articles || []);
         } else {
-          const errText = await r.value.text();
+          const errText = await r.value.text().catch(() => 'no body');
           console.error(`NewsAPI error status ${r.value.status}: ${errText}`);
         }
       } else {
-        console.error('NewsAPI fetch rejected:', r.reason);
+        console.error('NewsAPI fetch rejected');
       }
     }
 
@@ -74,11 +95,11 @@ export async function fetchNewsFromFinnhub(): Promise<RawNews[]> {
           const data = await r.value.json();
           dataList = dataList.concat(data.slice(0, 30));
         } else {
-          const errText = await r.value.text();
+          const errText = await r.value.text().catch(() => 'no body');
           console.error(`Finnhub error status ${r.value.status}: ${errText}`);
         }
       } else {
-        console.error('Finnhub fetch rejected:', r.reason);
+        console.error('Finnhub fetch rejected');
       }
     }
 
@@ -92,7 +113,7 @@ export async function fetchNewsFromFinnhub(): Promise<RawNews[]> {
       publishedAt: new Date(a.datetime * 1000).toISOString(),
     }));
   } catch (e) {
-    console.error('Finnhub fetch error', e);
+    console.error('Finnhub general error', e);
     return [];
   }
 }
@@ -101,6 +122,7 @@ export async function fetchAllProviders() {
   const results = await Promise.allSettled([
     fetchNewsFromNewsAPI(),
     fetchNewsFromFinnhub(),
+    fetchNewsFromRSS(),
   ]);
 
   return results.flatMap((r) => (r.status === 'fulfilled' ? r.value : []));
