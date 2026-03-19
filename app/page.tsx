@@ -317,7 +317,7 @@ function MobileHeader({ title, right = 'menu' }: { title: string; right?: 'menu'
 }
 
 function AskAnythingPage() {
-  const { messages, input, handleInputChange, handleSubmit, isLoading } = useChat({
+  const { messages, input, handleInputChange, handleSubmit, isLoading, append } = useChat({
     // @ts-ignore
     api: '/api/chat',
   }) as any;
@@ -342,10 +342,16 @@ function AskAnythingPage() {
             <p className="mt-4 text-xl text-zinc-400 xl:text-2xl">The best AI to search economic news.</p>
 
             <div className="mt-16 flex gap-3 overflow-x-auto pb-1 justify-center max-w-full">
-              <button type="button" onClick={() => handleInputChange({ target: { value: 'Recent US market news' } } as any)} className="whitespace-nowrap rounded-full border border-white/10 bg-white/5 px-6 py-4 text-xl font-semibold text-white">
+              <button 
+                type="button" 
+                onClick={() => append({ role: 'user', content: 'Recent US market news' })} 
+                className="whitespace-nowrap rounded-full border border-white/10 bg-white/5 px-6 py-4 text-xl font-semibold text-white transition hover:bg-white/10">
                 Recent US market news
               </button>
-              <button type="button" onClick={() => handleInputChange({ target: { value: 'Why are futures red?' } } as any)} className="whitespace-nowrap rounded-full border border-white/10 bg-white/5 px-6 py-4 text-xl font-semibold text-white/85">
+              <button 
+                type="button" 
+                onClick={() => append({ role: 'user', content: 'Why are futures red?' })} 
+                className="whitespace-nowrap rounded-full border border-white/10 bg-white/5 px-6 py-4 text-xl font-semibold text-white/85 transition hover:bg-white/10">
                 Why are futures red?
               </button>
             </div>
@@ -522,10 +528,15 @@ function NewsPage({
 
                   <div className="mt-5 flex items-center justify-between text-sm">
                     <span className="text-zinc-500">Why it matters: sector transmission and index-level spillover.</span>
-                    <button className="flex items-center gap-1 text-white">
-                      Open
-                      <ChevronRight className="h-4 w-4" />
-                    </button>
+                    {item.url ? (
+                      <a href={item.url} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-white transition hover:text-blue-400">
+                        Open <ChevronRight className="h-4 w-4" />
+                      </a>
+                    ) : (
+                      <button className="flex items-center gap-1 leading-tight text-white/50 cursor-not-allowed">
+                        Open <ChevronRight className="h-4 w-4" />
+                      </button>
+                    )}
                   </div>
                 </CardContent>
               </Card>
@@ -793,28 +804,82 @@ function IndexPage() {
 }
 
 function SettingsPage() {
+  const [syncing, setSyncing] = useState(false);
+  const [theme, setTheme] = useState('Dark');
+
+  const triggerSync = async () => {
+    setSyncing(true);
+    try {
+      const res = await fetch('/api/ingest-news');
+      const data = await res.json();
+      if (data.ok) alert(`Success! Fetched ${data.inserted} news items.`);
+      else alert(`Error: ${data.error}`);
+    } catch (e) {
+      alert('Failed to trigger sync.');
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   return (
     <div className="mx-auto w-full max-w-md px-4 pt-4 pb-28 xl:max-w-3xl xl:px-6 xl:pb-8">
       <div className="space-y-6 pt-2">
-        {settingGroups.map((group, groupIdx) => (
-          <div key={groupIdx}>
-            {group.title ? <div className="mb-3 text-xl font-bold tracking-wide text-zinc-500">{group.title}</div> : null}
-            <div className="overflow-hidden rounded-[1.75rem] border border-white/10 bg-white/5">
-              {group.items.map((item, idx) => (
-                <div
-                  key={item.label}
-                  className={`flex items-center justify-between px-6 py-5 ${idx !== group.items.length - 1 ? 'border-b border-white/10' : ''}`}
-                >
-                  <div className="text-2xl text-white">{item.label}</div>
-                  <div className="flex items-center gap-3 text-2xl text-zinc-500">
-                    {item.value ? <span>{item.value}</span> : null}
-                    {item.chevron ? <ChevronRightIcon className="h-5 w-5" /> : null}
-                  </div>
-                </div>
-              ))}
+        <div className="mb-8">
+          <div className="mb-3 text-xl font-bold tracking-wide text-zinc-500">DATA MANAGEMENT</div>
+          <div className="overflow-hidden rounded-[1.75rem] border border-white/10 bg-white/5">
+            <button 
+              onClick={triggerSync}
+              disabled={syncing}
+              className="w-full flex items-center justify-between px-6 py-5 hover:bg-white/5 transition"
+            >
+              <div className="text-2xl text-white">{syncing ? 'Syncing...' : 'Force Live API Sync'}</div>
+              <div className="flex items-center gap-3 text-2xl text-zinc-500">
+                <ChevronRightIcon className="h-5 w-5" />
+              </div>
+            </button>
+            <div className="w-full border-t border-white/10 flex items-center justify-between px-6 py-5 cursor-not-allowed opacity-50">
+              <div className="text-2xl text-white">Reset Application Data</div>
+              <div className="flex items-center gap-3 text-2xl text-zinc-500">
+                <ChevronRightIcon className="h-5 w-5" />
+              </div>
             </div>
           </div>
-        ))}
+        </div>
+
+        <div>
+          <div className="mb-3 text-xl font-bold tracking-wide text-zinc-500">APPEARANCE & NOTIFICATIONS</div>
+          <div className="overflow-hidden rounded-[1.75rem] border border-white/10 bg-white/5">
+            <button 
+              onClick={() => setTheme(theme === 'Dark' ? 'Light' : 'Dark')}
+              className="w-full border-b border-white/10 flex items-center justify-between px-6 py-5 hover:bg-white/5 transition"
+            >
+              <div className="text-2xl text-white">Theme</div>
+              <div className="flex items-center gap-3 text-2xl text-blue-400 font-medium">
+                {theme} Mode
+              </div>
+            </button>
+            <div className="w-full flex items-center justify-between px-6 py-5">
+              <div className="text-2xl text-white">Push Notifications</div>
+              <div className="flex items-center gap-3 text-2xl text-zinc-500">
+                Disabled
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div className="mb-3 text-xl font-bold tracking-wide text-zinc-500">APP INFORMATION</div>
+          <div className="overflow-hidden rounded-[1.75rem] border border-white/10 bg-white/5">
+             <div className="w-full border-b border-white/10 flex items-center justify-between px-6 py-5">
+              <div className="text-2xl text-white">App Version</div>
+              <div className="flex items-center gap-3 text-2xl text-zinc-500">2.0.0 (API Integrated)</div>
+            </div>
+             <a href="https://github.com/sechan9999/USmarketNews" target="_blank" rel="noreferrer" className="w-full flex items-center justify-between px-6 py-5 hover:bg-white/5 transition">
+              <div className="text-2xl text-white">Source Code</div>
+              <div className="flex items-center gap-3 text-2xl text-zinc-500"><ChevronRightIcon className="h-5 w-5" /></div>
+            </a>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -946,19 +1011,43 @@ function BottomNav({ activeTab, setActiveTab }: { activeTab: string; setActiveTa
 
 export default function HkMarketNewsApp() {
   const [activeTab, setActiveTab] = useState('news');
-  const [activeCategory, setActiveCategory] = useState('live');
+  const [activeCategory, setActiveCategory] = useState<string>('live');
   const [activeSeverity, setActiveSeverity] = useState<string | null>(null);
   const [query, setQuery] = useState('');
-
-  const filteredNews = useMemo(() => {
-    return topNews.filter((item) => {
-      const matchesCategory = activeCategory === 'live' ? true : item.category === activeCategory;
-      const matchesSeverity = activeSeverity ? item.severity === activeSeverity : true;
-      const text = `${item.title} ${item.summary} ${item.source} ${item.impact.join(' ')}`.toLowerCase();
-      const matchesQuery = query.trim() ? text.includes(query.toLowerCase()) : true;
-      return matchesCategory && matchesSeverity && matchesQuery;
-    });
+  
+  const [newsCache, setNewsCache] = useState<any[]>(topNews);
+  
+  // Actually fetch from backend using selected filters
+  React.useEffect(() => {
+    let url = `/api/news?category=${activeCategory === 'live' ? 'all' : activeCategory}`;
+    if (activeSeverity) url += `&impact=${activeSeverity}`;
+    if (query) url += `&q=${encodeURIComponent(query)}`;
+    
+    fetch(url)
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.data && data.data.length > 0) {
+          // Normalize API shape to topNews shape
+          const incomingNews = data.data.map((item: any) => ({
+             id: item.id,
+             source: item.source,
+             time: new Date(item.published_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }),
+             category: item.category,
+             severity: item.impact_level,
+             title: item.title,
+             summary: item.summary,
+             impact: Array.isArray(item.tickers) ? item.tickers : [],
+             url: item.url
+          }));
+          setNewsCache(incomingNews);
+        } else {
+          setNewsCache([]); // Show empty state when no items matching DB exist
+        }
+      })
+      .catch((e) => console.error(e));
   }, [activeCategory, activeSeverity, query]);
+
+  const filteredNews = newsCache;
 
   const renderMain = () => {
     switch (activeTab) {
