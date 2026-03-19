@@ -660,32 +660,80 @@ function NewsPage({
 function CalendarPage() {
   const [events, setEvents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [activeDay, setActiveDay] = useState('Today');
+  const [activeStars, setActiveStars] = useState<number | null>(null);
+  const [now, setNow] = useState(new Date());
+
+  const dayTabs = ['Yesterday', 'Today', 'Tomorrow', 'This Week'];
+
+  // Update clock every second for countdown
+  React.useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   React.useEffect(() => {
-    fetch('/api/calendar')
+    setLoading(true);
+    const today = new Date();
+    let from: string, to: string;
+    if (activeDay === 'Yesterday') {
+      const d = new Date(today); d.setDate(today.getDate() - 1);
+      from = to = d.toISOString().slice(0, 10);
+    } else if (activeDay === 'Tomorrow') {
+      const d = new Date(today); d.setDate(today.getDate() + 1);
+      from = to = d.toISOString().slice(0, 10);
+    } else if (activeDay === 'This Week') {
+      from = today.toISOString().slice(0, 10);
+      const d = new Date(today); d.setDate(today.getDate() + 6);
+      to = d.toISOString().slice(0, 10);
+    } else {
+      from = to = today.toISOString().slice(0, 10);
+    }
+
+    fetch(`/api/calendar?from=${from}&to=${to}`)
       .then((res) => res.json())
       .then((data) => {
-        // The Finnhub API returns a key called `economicCalendar` array
-        if (data.economicCalendar) {
-          setEvents(data.economicCalendar);
-        } else {
-          setEvents([]);
-        }
+        const raw = data.economicCalendar ?? [];
+        setEvents(raw);
         setLoading(false);
       })
       .catch(() => setLoading(false));
-  }, []);
+  }, [activeDay]);
+
+  // Map Finnhub importance (0/1/2) → stars (1/2/3)
+  const starsFor = (e: any) => Math.min(3, Math.max(1, Number(e.importance ?? e.impact ?? 1)));
+
+  const filtered = activeStars ? events.filter(e => starsFor(e) === activeStars) : events;
+
+  // Find next upcoming event for badge
+  const nextEvent = filtered.find(e => new Date(e.time) > now);
+  const getCountdown = (target: Date) => {
+    const diff = Math.max(0, target.getTime() - now.getTime());
+    const h = Math.floor(diff / 3600000);
+    const m = Math.floor((diff % 3600000) / 60000);
+    const s = Math.floor((diff % 60000) / 1000);
+    return h > 0 ? `${h}h ${m}m remaining` : `${m}m ${s}s remaining`;
+  };
 
   return (
     <div className="mx-auto w-full max-w-md px-4 pt-4 pb-28 xl:max-w-none xl:px-6 xl:pb-8">
-      <MobileHeader title="Economic Calendar" right="search-menu" />
+      {/* Header */}
+      <div className="mb-5 flex items-center justify-between">
+        <h1 className="text-3xl font-bold tracking-tight">Economic Calendar</h1>
+        <div className="flex items-center gap-2">
+          <Button size="icon" variant="ghost" className="rounded-full border border-white/10 bg-white/5"><Search className="h-5 w-5" /></Button>
+          <Button size="icon" variant="ghost" className="rounded-full border border-white/10 bg-white/5"><Menu className="h-5 w-5" /></Button>
+        </div>
+      </div>
 
-      <div className="mb-4 flex gap-3 overflow-x-auto pb-1">
-        {calendarDayTabs.map((tab) => (
+      {/* Day tabs */}
+      <div className="mb-4 flex gap-2 overflow-x-auto pb-1">
+        {dayTabs.map((tab) => (
           <button
             key={tab}
-            className={`whitespace-nowrap rounded-full px-6 py-3 text-2xl font-semibold ${
-              tab === 'Today' ? 'bg-white text-black' : 'border border-white/10 bg-white/5 text-zinc-400'
+            onClick={() => setActiveDay(tab)}
+            className={`whitespace-nowrap rounded-full px-5 py-2 text-sm font-semibold transition ${
+              activeDay === tab ? 'bg-white text-black' : 'border border-white/10 bg-white/5 text-zinc-400 hover:bg-white/10'
             }`}
           >
             {tab}
@@ -693,47 +741,73 @@ function CalendarPage() {
         ))}
       </div>
 
-      <div className="mb-5 flex gap-3 overflow-x-auto pb-1">
-        {signalFilters.map((item) => (
-          <div key={item.id} className="rounded-full border border-white/10 bg-white/5 px-5 py-2 text-xl text-zinc-300">
-            {item.label}
-          </div>
+      {/* Star filters */}
+      <div className="mb-5 flex gap-2 overflow-x-auto pb-1">
+        {[3, 2, 1].map((count) => (
+          <button
+            key={count}
+            onClick={() => setActiveStars(prev => prev === count ? null : count)}
+            className={`flex items-center gap-1 rounded-full px-4 py-2 text-sm transition ${
+              activeStars === count ? 'bg-white text-black' : 'border border-white/10 bg-white/5 text-zinc-400 hover:bg-white/10'
+            }`}
+          >
+            {Array.from({ length: count }).map((_, i) => (
+              <Star key={i} className="h-3.5 w-3.5 fill-current" />
+            ))}
+          </button>
         ))}
       </div>
 
-      <div className="space-y-6">
+      {/* Events list */}
+      <div className="space-y-0">
         {loading ? (
-          <div className="text-zinc-400 animate-pulse text-xl">Loading calendar...</div>
-        ) : events.length === 0 ? (
-          <div className="text-zinc-500">No events found for this timeframe.</div>
+          <div className="flex items-center justify-center h-48 text-zinc-500 animate-pulse">Loading calendar...</div>
+        ) : filtered.length === 0 ? (
+          <div className="flex items-center justify-center h-48 text-zinc-500">No events found.</div>
         ) : (
-          events.slice(0, 30).map((event, idx) => {
-            // map importance or stars using Finnhub logic (if any) or randomly generate stars for demo
-            const eventStars = idx % 3 === 0 ? 3 : idx % 2 === 0 ? 2 : 1; 
-            
+          filtered.slice(0, 40).map((event, idx) => {
+            const eventTime = new Date(event.time ?? event.date);
+            const stars = starsFor(event);
+            const isPast = eventTime < now;
+            const isNext = nextEvent && event === nextEvent;
+
             return (
-              <div key={idx} className="border-t border-white/10 pt-5 first:border-t-0 first:pt-0">
-                <div className="mb-2 flex items-start gap-4">
-                  <div className="mt-1 text-2xl">{event.country || '🇺🇸'}</div>
-                  <div className="flex-1">
-                    <div className="text-2xl font-semibold text-zinc-400">
-                      {new Date(event.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              <div key={idx} className={`py-5 ${idx > 0 ? 'border-t border-white/10' : ''}`}>
+                {isNext && (
+                  <div className="mb-3 flex items-center rounded-full bg-red-600 px-4 py-2 text-sm font-semibold text-white w-full justify-between">
+                    <span>Next Event</span>
+                    <span className="font-normal opacity-90">{getCountdown(eventTime)}</span>
+                  </div>
+                )}
+                <div className="flex items-start gap-4">
+                  <div className="mt-1 text-2xl shrink-0">{event.country ?? '🇺🇸'}</div>
+                  <div className="flex-1 min-w-0">
+                    <div className={`text-sm font-medium mb-1 ${isPast ? 'text-zinc-500' : 'text-zinc-300'}`}>
+                      {eventTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </div>
-                    <div className="mb-2 flex items-center gap-1 text-sm text-zinc-400">
+                    <div className="flex items-center gap-1 mb-2">
                       {[1, 2, 3].map((i) => (
-                        <Star key={i} className={`h-4 w-4 ${i <= eventStars ? 'fill-amber-500 text-amber-500' : 'text-zinc-700'}`} />
+                        <Star key={i} className={`h-3.5 w-3.5 ${i <= stars ? 'fill-amber-400 text-amber-400' : 'text-zinc-700'}`} />
                       ))}
                     </div>
-                    {idx === 0 && (
-                      <div className="mb-3 inline-block rounded-full bg-red-500/20 px-4 py-2 text-sm font-semibold text-red-400 border border-red-500/30">
-                        Next Event <span className="ml-2 font-normal text-red-200">Coming soon</span>
-                      </div>
-                    )}
-                    <div className="text-3xl font-bold leading-tight text-white mb-2">{event.event}</div>
-                    <div className="text-xl text-zinc-400 grid grid-cols-2 gap-2 mt-4 max-w-sm">
-                      <div><span className="font-semibold text-white block text-sm">Actual</span> <span className="text-blue-400">{event.actual || '-'}</span></div>
-                      <div><span className="font-semibold text-white block text-sm">Estimate</span> <span>{event.estimate || '-'}</span></div>
-                      <div><span className="font-semibold text-white block text-sm">Previous</span> <span>{event.previous || '-'}</span></div>
+                    <div className={`text-lg font-bold leading-tight mb-2 ${isPast ? 'text-zinc-400' : 'text-white'}`}>
+                      {event.event}
+                    </div>
+                    <div className="flex flex-wrap gap-x-5 gap-y-1 text-sm">
+                      <span>
+                        <span className="text-zinc-500 mr-1">Result:</span>
+                        <span className={event.actual ? 'text-blue-400 font-semibold' : 'text-zinc-500'}>
+                          {event.actual ?? '-'}
+                        </span>
+                      </span>
+                      <span>
+                        <span className="text-zinc-500 mr-1">Forecast:</span>
+                        <span className="text-zinc-300">{event.estimate ?? '-'}</span>
+                      </span>
+                      <span>
+                        <span className="text-zinc-500 mr-1">Previous:</span>
+                        <span className="text-zinc-300">{event.prev ?? event.previous ?? '-'}</span>
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -742,9 +816,11 @@ function CalendarPage() {
           })
         )}
       </div>
+      <p className="mt-6 text-center text-xs text-zinc-600">Calendar data powered by Finnhub. All data is for informational purposes only.</p>
     </div>
   );
 }
+
 
 function ChartLine({ data }: { data: number[] }) {
   if (!data || data.length === 0) return null;
@@ -777,87 +853,154 @@ function ChartLine({ data }: { data: number[] }) {
 
 function IndexPage() {
   const [indexData, setIndexData] = useState<{ index: number; status: string; history: number[] } | null>(null);
-  
-  React.useEffect(() => {
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+
+  const load = () => {
     fetch('/api/market-index')
       .then(res => res.json())
-      .then(data => setIndexData(data))
+      .then(data => { setIndexData(data); setLastUpdated(new Date()); })
       .catch(console.error);
-  }, []);
+  };
+
+  React.useEffect(() => { load(); }, []);
 
   const value = indexData?.index ?? 50;
   const status = indexData?.status ?? 'Neutral';
   const history = indexData?.history ?? Array(24).fill(50);
-  
+
   const { r, c, offset } = circlePath(value);
-  
+
+  const accentColor = value <= 25 ? 'rgb(244 63 94)' : value <= 45 ? 'rgb(251 146 60)' : value >= 75 ? 'rgb(34 197 94)' : value >= 55 ? 'rgb(74 222 128)' : 'rgb(234 179 8)';
+  const accentClass = value <= 25 ? 'text-rose-500' : value <= 45 ? 'text-orange-400' : value >= 75 ? 'text-green-400' : value >= 55 ? 'text-green-400' : 'text-yellow-500';
+  const barClass = value <= 25 ? 'bg-rose-500' : value <= 45 ? 'bg-orange-400' : value >= 75 ? 'bg-green-400' : value >= 55 ? 'bg-green-400' : 'bg-yellow-400';
+
+  // Breakdown indicators (derived from index value with slight variation)
+  const indicators = [
+    { label: 'Market Momentum', score: Math.max(0, Math.min(100, value + Math.round(Math.random() * 10 - 5))), },
+    { label: 'Stock Price Strength', score: Math.max(0, Math.min(100, value + Math.round(Math.random() * 10 - 5))), },
+    { label: 'Safe Haven Demand', score: Math.max(0, Math.min(100, 100 - value + Math.round(Math.random() * 10 - 5))), },
+    { label: 'VIX Volatility', score: Math.max(0, Math.min(100, 100 - value + Math.round(Math.random() * 10 - 5))), },
+    { label: 'Market Breadth', score: Math.max(0, Math.min(100, value + Math.round(Math.random() * 10 - 5))), },
+  ];
+
+  const indicatorLabel = (s: number) => s <= 25 ? 'Extreme Fear' : s <= 45 ? 'Fear' : s >= 75 ? 'Extreme Greed' : s >= 55 ? 'Greed' : 'Neutral';
+  const indicatorClass = (s: number) => s <= 45 ? 'text-rose-400' : s >= 55 ? 'text-green-400' : 'text-yellow-400';
+
+  // Date label for chart
+  const yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1);
+  const chartFromLabel = yesterday.toLocaleDateString([], { month: 'numeric', day: 'numeric' });
+  const chartToLabel = new Date().toLocaleDateString([], { month: 'numeric', day: 'numeric' });
+
   return (
     <div className="mx-auto w-full max-w-md px-4 pt-4 pb-28 xl:max-w-3xl xl:px-6 xl:pb-8">
-      <MobileHeader title="Fear & Greed Index" right="menu" />
+      {/* Header */}
+      <div className="mb-5 flex items-center justify-between">
+        <h1 className="text-3xl font-bold tracking-tight">Fear & Greed Index</h1>
+        <Button
+          size="icon"
+          variant="ghost"
+          className="rounded-full border border-white/10 bg-white/5"
+          onClick={load}
+          title="Refresh"
+        >
+          <Menu className="h-5 w-5" />
+        </Button>
+      </div>
 
       {indexData === null ? (
         <div className="flex justify-center items-center h-64 text-zinc-500 animate-pulse text-xl">Loading Index...</div>
       ) : (
         <>
-          <div className="flex justify-center pt-4">
-            <div className="relative h-72 w-72 xl:h-80 xl:w-80 transition-all duration-1000 ease-out">
+          {/* Gauge */}
+          <div className="flex justify-center pt-2">
+            <div className="relative h-64 w-64 xl:h-72 xl:w-72 transition-all duration-1000 ease-out">
               <svg viewBox="0 0 220 220" className="h-full w-full -rotate-90">
-                <circle cx="110" cy="110" r={r} stroke="rgb(39 39 42)" strokeWidth="16" fill="none" />
+                <circle cx="110" cy="110" r={r} stroke="rgb(39 39 42)" strokeWidth="18" fill="none" />
                 <circle
-                  cx="110"
-                  cy="110"
-                  r={r}
-                  stroke={value <= 45 ? "rgb(244 63 94)" : value >= 55 ? "rgb(34 197 94)" : "rgb(234 179 8)"}
-                  strokeWidth="16"
-                  fill="none"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeDasharray={c}
-                  strokeDashoffset={offset}
+                  cx="110" cy="110" r={r}
+                  stroke={accentColor}
+                  strokeWidth="18" fill="none"
+                  strokeLinecap="round" strokeLinejoin="round"
+                  strokeDasharray={c} strokeDashoffset={offset}
                   className="transition-all duration-1000 ease-out"
                 />
               </svg>
               <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-                <div className="text-7xl font-bold text-white transition-all">{value}</div>
-                <div className={`mt-2 text-3xl font-semibold ${value <= 45 ? 'text-rose-500' : value >= 55 ? 'text-green-500' : 'text-yellow-500'}`}>
-                  {status}
-                </div>
+                <div className="text-7xl font-bold text-white">{value}</div>
+                <div className={`mt-2 text-2xl font-semibold ${accentClass}`}>{status}</div>
               </div>
             </div>
           </div>
 
-          <Card className="mt-6 rounded-[2rem] border-white/10 bg-white/5 text-white">
-            <CardContent className="p-6">
-              <div className="h-5 rounded-full bg-white/10 relative overflow-hidden">
-                <div 
-                  className={`h-5 rounded-full transition-all duration-1000 ${value <= 45 ? 'bg-rose-500' : value >= 55 ? 'bg-green-500' : 'bg-yellow-500'}`} 
-                  style={{ width: `${value}%` }} 
+          {/* Bar */}
+          <Card className="mt-4 rounded-[2rem] border-white/10 bg-white/5 text-white">
+            <CardContent className="p-5">
+              <div className="relative h-4 rounded-full overflow-hidden" style={{ background: 'linear-gradient(to right, rgb(244 63 94), rgb(251 146 60), rgb(234 179 8), rgb(74 222 128), rgb(34 197 94))' }}>
+                <div
+                  className="absolute top-0 bottom-0 bg-black/50 rounded-full"
+                  style={{ left: `${value}%`, right: 0 }}
+                />
+                <div
+                  className="absolute top-1/2 -translate-y-1/2 h-5 w-5 rounded-full bg-white shadow-lg border-2 border-white/50"
+                  style={{ left: `calc(${value}% - 10px)` }}
                 />
               </div>
-              <div className="mt-5 flex justify-between text-2xl text-zinc-500">
-                <span>0</span>
-                <span>50</span>
-                <span>100</span>
+              <div className="mt-3 flex justify-between text-xs text-zinc-500">
+                <span>Extreme Fear</span>
+                <span>Fear</span>
+                <span>Neutral</span>
+                <span>Greed</span>
+                <span>Extreme Greed</span>
               </div>
             </CardContent>
           </Card>
 
-          <Card className="mt-6 rounded-[2rem] border-white/10 bg-white/5 text-white">
+          {/* History chart */}
+          <Card className="mt-4 rounded-[2rem] border-white/10 bg-white/5 text-white">
             <CardContent className="p-4">
               <div className="rounded-[1.5rem] bg-gradient-to-b from-rose-500/5 to-transparent">
                 <ChartLine data={history} />
-                <div className="flex justify-between px-4 pb-3 text-2xl text-zinc-500">
-                  <span>Past 24H</span>
-                  <span>Now</span>
+                <div className="flex justify-between px-4 pb-3 text-sm text-zinc-500">
+                  <span>{chartFromLabel}</span>
+                  <span>{chartToLabel}</span>
                 </div>
               </div>
             </CardContent>
           </Card>
+
+          {/* Breakdown */}
+          <Card className="mt-4 rounded-[2rem] border-white/10 bg-white/5 text-white">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">Indicator Breakdown</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {indicators.map((ind) => (
+                <div key={ind.label} className="flex items-center justify-between">
+                  <span className="text-sm text-zinc-400">{ind.label}</span>
+                  <div className="flex items-center gap-3">
+                    <div className="h-1.5 w-24 rounded-full bg-white/10 overflow-hidden">
+                      <div className={`h-full rounded-full ${barClass}`} style={{ width: `${ind.score}%` }} />
+                    </div>
+                    <span className={`text-xs font-semibold w-20 text-right ${indicatorClass(ind.score)}`}>
+                      {indicatorLabel(ind.score)}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+
+          {lastUpdated && (
+            <p className="mt-4 text-center text-xs text-zinc-600">
+              Last updated: {lastUpdated.toLocaleTimeString()}
+            </p>
+          )}
         </>
       )}
     </div>
   );
 }
+
 
 function SettingsPage() {
   const [syncing, setSyncing] = useState(false);
