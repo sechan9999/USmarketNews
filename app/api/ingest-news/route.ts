@@ -19,6 +19,7 @@ export async function GET() {
     const { score, impactLevel } = scoreMarketImpact({
       title: item.title,
       summary: item.description,
+      source: item.source,
     });
 
     return {

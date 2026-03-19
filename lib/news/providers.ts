@@ -9,50 +9,76 @@ type RawNews = {
 };
 
 export async function fetchNewsFromNewsAPI(): Promise<RawNews[]> {
-  const url = new URL('https://newsapi.org/v2/top-headlines');
-  url.searchParams.set('country', 'us');
-  url.searchParams.set('category', 'business');
-  url.searchParams.set('pageSize', '25');
-  url.searchParams.set('apiKey', process.env.NEWS_API_KEY!);
+  try {
+    const urls = ['business', 'technology'].map(category => {
+      const url = new URL('https://newsapi.org/v2/top-headlines');
+      url.searchParams.set('country', 'us');
+      url.searchParams.set('category', category);
+      url.searchParams.set('pageSize', '30');
+      url.searchParams.set('apiKey', process.env.NEWS_API_KEY!);
+      return url.toString();
+    });
 
-  const res = await fetch(url.toString(), { next: { revalidate: 300 } });
-  if (!res.ok) throw new Error('Failed to fetch NewsAPI');
+    const requests = urls.map(u => fetch(u, { next: { revalidate: 300 } }));
+    const responses = await Promise.allSettled(requests);
+    
+    let articles: any[] = [];
+    for (const r of responses) {
+      if (r.status === 'fulfilled' && r.value.ok) {
+        const data = await r.value.json();
+        articles = articles.concat(data.articles || []);
+      }
+    }
 
-  const data = await res.json();
-  return (data.articles ?? []).map((a: any) => ({
-    id: a.url,
-    source: a.source?.name ?? 'NewsAPI',
-    title: a.title,
-    description: a.description,
-    url: a.url,
-    image: a.urlToImage,
-    publishedAt: a.publishedAt,
-  }));
+    return articles.map((a: any) => ({
+      id: a.url,
+      source: a.source?.name ?? 'NewsAPI',
+      title: a.title,
+      description: a.description,
+      url: a.url,
+      image: a.urlToImage,
+      publishedAt: a.publishedAt,
+    }));
+  } catch (e) {
+    console.error('NewsAPI fetch error', e);
+    return [];
+  }
 }
 
 export async function fetchNewsFromFinnhub(): Promise<RawNews[]> {
-  const today = new Date();
-  const from = new Date(today);
-  from.setDate(today.getDate() - 2);
+  try {
+    const categories = ['general', 'crypto', 'forex'];
+    const urls = categories.map(cat => {
+      const url = new URL('https://finnhub.io/api/v1/news');
+      url.searchParams.set('category', cat);
+      url.searchParams.set('token', process.env.FINNHUB_API_KEY!);
+      return url.toString();
+    });
 
-  const format = (d: Date) => d.toISOString().slice(0, 10);
-  const url = new URL('https://finnhub.io/api/v1/news');
-  url.searchParams.set('category', 'general');
-  url.searchParams.set('token', process.env.FINNHUB_API_KEY!);
+    const requests = urls.map(u => fetch(u, { next: { revalidate: 300 } }));
+    const responses = await Promise.allSettled(requests);
+    
+    let dataList: any[] = [];
+    for (const r of responses) {
+      if (r.status === 'fulfilled' && r.value.ok) {
+        const data = await r.value.json();
+        dataList = dataList.concat(data.slice(0, 30));
+      }
+    }
 
-  const res = await fetch(url.toString(), { next: { revalidate: 300 } });
-  if (!res.ok) throw new Error('Failed to fetch Finnhub');
-
-  const data = await res.json();
-  return (data ?? []).slice(0, 25).map((a: any) => ({
-    id: String(a.id),
-    source: a.source ?? 'Finnhub',
-    title: a.headline,
-    description: a.summary,
-    url: a.url,
-    image: a.image,
-    publishedAt: new Date(a.datetime * 1000).toISOString(),
-  }));
+    return dataList.map((a: any) => ({
+      id: String(a.id),
+      source: a.source ?? 'Finnhub',
+      title: a.headline,
+      description: a.summary,
+      url: a.url,
+      image: a.image,
+      publishedAt: new Date(a.datetime * 1000).toISOString(),
+    }));
+  } catch (e) {
+    console.error('Finnhub fetch error', e);
+    return [];
+  }
 }
 
 export async function fetchAllProviders() {

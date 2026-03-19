@@ -8,17 +8,44 @@ export async function POST(req: Request) {
 
   const latestMessage = messages[messages.length - 1]?.content || '';
 
-  // 1. 간단한 키워드로 최근 뉴스 10개를 긁어옵니다. (pgvector 쓰지 않는 Full-text search)
-  // 'q' 대신 그냥 최신 10개를 던져줘도 모델 맥락상 훌륭한 답변이 나옵니다.
-  const { data: newsItems } = await supabase
+  // 1. Fetch a broader set of recent news (up to 60)
+  const { data: recentNews } = await supabase
     .from('news_items')
     .select('title, summary, source, category, impact_level, published_at')
     .order('published_at', { ascending: false })
-    .limit(15);
+    .limit(60);
 
-  const contextData = newsItems?.map(
+  // 2. Retrieval Engine: Mini keyword matcher (BM25-lite)
+  const userTokens = latestMessage.toLowerCase().split(/\W+/).filter((t: string) => t.length > 2);
+  
+  let scoredNews = (recentNews ?? []).map((news) => {
+    let relevance = 0;
+    const textToSearch = `${news.title} ${news.summary ?? ''} ${news.category}`.toLowerCase();
+    
+    // Default recency bias
+    relevance += 1; 
+    
+    // Keyword match
+    userTokens.forEach((token: string) => {
+      if (textToSearch.includes(token)) {
+        relevance += 5;
+      }
+    });
+
+    // High impact gets a slight boost in retrieval
+    if (news.impact_level === 'critical') relevance += 2;
+    if (news.impact_level === 'important') relevance += 1;
+
+    return { ...news, relevance };
+  });
+
+  // Sort by relevance, then slice top 10 most relevant chunks
+  scoredNews.sort((a, b) => b.relevance - a.relevance);
+  const topContext = scoredNews.slice(0, 10);
+
+  const contextData = topContext.map(
     (n) => `[${n.source} | ${n.impact_level}] ${n.title} - ${n.summary ?? 'No summary'}`
-  ).join('\n') ?? 'No recent news available.';
+  ).join('\n') || 'No recent news available.';
 
   const systemPrompt = `You are an elite Wall Street macro analyst and quant researcher.
 The user is asking a question about the current market, economy, or specific tickers.
