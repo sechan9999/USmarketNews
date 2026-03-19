@@ -1,40 +1,38 @@
--- Supabase SQL Schema for Byul/HK.ai Market News App
--- Copy and paste this entirely into the Supabase SQL Editor and click 'Run'
+-- HK.ai Market News — Supabase Schema
+-- Run this in the Supabase SQL Editor.
+-- Safe to re-run (all statements are idempotent).
 
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-
+-- news_items table
 CREATE TABLE IF NOT EXISTS news_items (
-  id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
-  external_id text UNIQUE NOT NULL,
-  source text NOT NULL,
-  title text NOT NULL,
-  summary text,
-  url text NOT NULL,
-  image_url text,
-  published_at timestamptz NOT NULL,
-  category text NOT NULL,
-  impact_level text NOT NULL,
-  market_score float NOT NULL,
-  tickers text[] DEFAULT '{}',
-  tags text[] DEFAULT '{}',
-  created_at timestamptz DEFAULT now()
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  external_id TEXT UNIQUE NOT NULL,
+  source TEXT,
+  title TEXT NOT NULL,
+  summary TEXT,
+  url TEXT,
+  published_at TIMESTAMPTZ NOT NULL,
+  category TEXT,
+  tickers TEXT[],
+  impact_level TEXT DEFAULT 'watch',
+  market_score NUMERIC DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Create indexes to optimize the retrieval engine and dashboard loading speed
+-- Indexes for retrieval engine performance
 CREATE INDEX IF NOT EXISTS idx_news_items_published_at ON news_items(published_at DESC);
 CREATE INDEX IF NOT EXISTS idx_news_items_category ON news_items(category);
 CREATE INDEX IF NOT EXISTS idx_news_items_impact_level ON news_items(impact_level);
 
--- Turn on Row Level Security (Secure the table)
+-- Row Level Security
 ALTER TABLE news_items ENABLE ROW LEVEL SECURITY;
 
--- Allow public read access (for Next.js frontend to fetch news)
-CREATE POLICY "Allow public read access" ON news_items
-  FOR SELECT
-  USING (true);
+-- Drop existing policies first (prevents 42710 duplicate error on re-run)
+DROP POLICY IF EXISTS "Allow public read access" ON news_items;
+DROP POLICY IF EXISTS "Allow service role insert" ON news_items;
 
--- Allow service role (backend API) to insert/update news
-CREATE POLICY "Allow service role insert" ON news_items
-  FOR ALL
-  USING (true)
-  WITH CHECK (true);
+-- Public read (frontend news feed)
+CREATE POLICY "Allow public read access" ON news_items FOR SELECT USING (true);
+
+-- Service role write (ingestion engine)
+CREATE POLICY "Allow service role insert" ON news_items FOR ALL USING (true) WITH CHECK (true);
