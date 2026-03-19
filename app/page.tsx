@@ -1,7 +1,6 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
-import { useChat } from '@ai-sdk/react';
+import React, { useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import {
   Search,
@@ -316,17 +315,58 @@ function MobileHeader({ title, right = 'menu' }: { title: string; right?: 'menu'
   );
 }
 
-function AskAnythingPage() {
-  const { messages, input, handleInputChange, handleSubmit, isLoading, append, error } = useChat({
-    // @ts-ignore
-    api: '/api/chat',
-    onError: (err: any) => {
-      console.error('Chat error:', err);
-      alert(`Chat Error: ${err.message || 'Unknown error'}`);
-    }
-  }) as any;
+type ChatMessage = { id: string; role: 'user' | 'assistant'; content: string };
 
-  const inputValue = input || '';
+function AskAnythingPage() {
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [inputValue, setInputValue] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const bottomRef = useRef<HTMLDivElement>(null);
+
+  const sendMessage = async (text: string) => {
+    if (!text.trim() || isLoading) return;
+    setErrorMsg(null);
+
+    const userMsg: ChatMessage = { id: Date.now().toString(), role: 'user', content: text };
+    const nextMessages = [...messages, userMsg];
+    setMessages(nextMessages);
+    setInputValue('');
+    setIsLoading(true);
+
+    const assistantId = (Date.now() + 1).toString();
+    setMessages([...nextMessages, { id: assistantId, role: 'assistant', content: '' }]);
+
+    try {
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: nextMessages.map(({ role, content }) => ({ role, content })) }),
+      });
+
+      if (!res.ok) {
+        const errText = await res.text();
+        throw new Error(`API error ${res.status}: ${errText.slice(0, 200)}`);
+      }
+
+      const reader = res.body!.getReader();
+      const decoder = new TextDecoder();
+      let accumulated = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        accumulated += decoder.decode(value, { stream: true });
+        setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, content: accumulated } : m));
+        bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+      }
+    } catch (e: any) {
+      setErrorMsg(e.message);
+      setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, content: `Error: ${e.message}` } : m));
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return (
     <div className="mx-auto flex min-h-[calc(100vh-92px)] w-full max-w-md flex-col px-4 pt-6 pb-28 xl:min-h-0 xl:max-w-none xl:px-0 xl:pb-0">
@@ -340,42 +380,42 @@ function AskAnythingPage() {
       </div>
 
       <div className="mt-6 flex flex-1 flex-col justify-end xl:mt-10 mb-4 overflow-y-auto space-y-4">
-        {error && (
+        {errorMsg && (
           <div className="p-4 rounded-3xl bg-red-500/20 border border-red-500/50 text-red-100 text-center mb-4">
-            Error: {error.message}
+            {errorMsg}
           </div>
         )}
-        
-        {!messages || messages.length === 0 ? (
+
+        {messages.length === 0 ? (
           <div className="text-center my-auto w-full">
             <h1 className="text-5xl font-bold tracking-tight text-white xl:text-6xl">Ask anything.</h1>
             <p className="mt-4 text-xl text-zinc-400 xl:text-2xl">The best AI to search economic news.</p>
 
             <div className="mt-16 flex gap-3 overflow-x-auto pb-1 justify-center max-w-full">
-              <button 
-                type="button" 
-                onClick={() => append({ id: Date.now().toString(), role: 'user', content: 'Recent US market news' })} 
+              <button
+                type="button"
+                onClick={() => sendMessage('Recent US market news')}
                 className="whitespace-nowrap rounded-full border border-white/10 bg-white/5 px-6 py-4 text-xl font-semibold text-white transition hover:bg-white/10">
                 Recent US market news
               </button>
-              <button 
-                type="button" 
-                onClick={() => append({ id: Date.now().toString(), role: 'user', content: 'Why are futures red?' })} 
+              <button
+                type="button"
+                onClick={() => sendMessage('Why are futures red?')}
                 className="whitespace-nowrap rounded-full border border-white/10 bg-white/5 px-6 py-4 text-xl font-semibold text-white/85 transition hover:bg-white/10">
                 Why are futures red?
               </button>
             </div>
           </div>
         ) : (
-          messages.map((m: any, i: number) => (
-            <div key={m.id || i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-              <div className={`p-4 rounded-3xl max-w-[85%] ${m.role === 'user' ? 'bg-white/10 text-white' : 'bg-zinc-900 border border-white/10 text-zinc-300'} whitespace-pre-wrap`}>
-                {m.content}
+          messages.map((m) => (
+            <div key={m.id} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+              <div className={`p-4 rounded-3xl max-w-[85%] text-base leading-relaxed ${m.role === 'user' ? 'bg-white/10 text-white' : 'bg-zinc-900 border border-white/10 text-zinc-300'} whitespace-pre-wrap`}>
+                {m.content || <span className="opacity-40 italic">Thinking...</span>}
               </div>
             </div>
           ))
         )}
-        {isLoading && (
+        {isLoading && messages.length > 0 && messages[messages.length - 1]?.content === '' && (
           <div className="flex justify-start">
             <div className="p-4 rounded-3xl bg-zinc-900 border border-white/10 flex items-center gap-2">
               <span className="h-2 w-2 bg-white rounded-full animate-bounce"></span>
@@ -384,21 +424,27 @@ function AskAnythingPage() {
             </div>
           </div>
         )}
+        <div ref={bottomRef} />
       </div>
 
-      <form onSubmit={(e) => { e.preventDefault(); handleSubmit(e); }} className="space-y-3 shrink-0">
+      <form onSubmit={(e) => { e.preventDefault(); sendMessage(inputValue); }} className="space-y-3 shrink-0">
         <div className="flex items-center gap-3">
           <Button type="button" size="icon" variant="ghost" className="h-16 w-16 shrink-0 rounded-full border border-white/10 bg-white/5 text-white">
             <Paperclip className="h-6 w-6" />
           </Button>
           <div className="flex h-16 flex-1 items-center rounded-full border border-white/10 bg-white/5 px-5">
             <input
+              type="text"
               value={inputValue}
-              onChange={handleInputChange}
-              className="bg-transparent text-xl text-white outline-none w-full placeholder:text-zinc-500"
+              onChange={(e) => setInputValue(e.target.value)}
+              disabled={isLoading}
+              className="bg-transparent text-xl text-white outline-none w-full placeholder:text-zinc-500 disabled:opacity-70"
               placeholder="Ask anything..."
             />
-            <button type="submit" className="ml-auto flex h-11 w-11 items-center justify-center rounded-full bg-white text-black shrink-0 disabled:opacity-50" disabled={isLoading || !inputValue.trim()}>
+            <button
+              type="submit"
+              className="ml-auto flex h-11 w-11 items-center justify-center rounded-full bg-white text-black shrink-0 disabled:opacity-50"
+              disabled={isLoading || !inputValue.trim()}>
               <ArrowUp className="h-5 w-5" />
             </button>
           </div>
