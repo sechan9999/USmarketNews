@@ -1011,35 +1011,65 @@ function DesktopSidebar({ activeTab, setActiveTab }: { activeTab: string; setAct
 }
 
 function DesktopRightRail() {
+  const done = [
+    'News ingestion: NewsAPI + Finnhub live fetch',
+    'Market impact ranking engine (score 0–100)',
+    'AI Research: RAG streaming via GPT-4o-mini',
+    'Supabase DB connected (news_items table live)',
+    'Force Sync: manual ingest trigger in Settings',
+    'Fear & Greed Index: live API endpoint',
+  ];
+
+  const pending = [
+    'Calendar: connect FRED / Finnhub economic events',
+    'AI Research: citation trails & saved prompts',
+    'Settings: persist theme + push notification prefs',
+    'Cron job: auto-ingest every 15 min (Vercel)',
+    'Auth: user login + watchlist persistence',
+    'Vercel: set env vars for full production deploy',
+  ];
+
   return (
     <aside className="hidden border-l border-white/10 xl:block">
-      <div className="sticky top-0 p-6">
+      <div className="sticky top-0 p-6 space-y-4">
         <Card className="rounded-3xl border-white/10 bg-zinc-900 text-white">
-          <CardHeader>
-            <CardTitle className="text-lg">Why this design works</CardTitle>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center gap-2">
+              <span className="h-2 w-2 rounded-full bg-green-400 animate-pulse inline-block" />
+              Live — Completed
+            </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-3 text-sm text-zinc-300">
-            <p>Each tab now has its own content model instead of being a dead navigation item.</p>
-            <p>Mobile screens match the native app pattern more closely: ask screen, calendar, index, settings.</p>
-            <p>The desktop layout still behaves like a market terminal rather than a generic mobile mockup.</p>
+          <CardContent className="space-y-2">
+            {done.map((item, i) => (
+              <div key={i} className="flex items-start gap-2 text-sm text-zinc-300">
+                <span className="mt-0.5 text-green-400 shrink-0">✓</span>
+                <span>{item}</span>
+              </div>
+            ))}
           </CardContent>
         </Card>
 
-        <Card className="mt-4 rounded-3xl border-white/10 bg-zinc-900 text-white">
-          <CardHeader>
-            <CardTitle className="text-lg">Remaining product gaps</CardTitle>
+        <Card className="rounded-3xl border-white/10 bg-zinc-900 text-white">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center gap-2">
+              <span className="h-2 w-2 rounded-full bg-yellow-400 inline-block" />
+              Roadmap — Pending
+            </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-3 text-sm text-zinc-300">
-            <p>1. AI Research still needs real model summaries, citation trails, and saved prompts.</p>
-            <p>2. Calendar should be API-driven with timezone awareness and impact weighting.</p>
-            <p>3. Fear & Greed needs live inputs instead of static visualization.</p>
-            <p>4. Settings need real persistence, auth, and notification preferences.</p>
+          <CardContent className="space-y-2">
+            {pending.map((item, i) => (
+              <div key={i} className="flex items-start gap-2 text-sm text-zinc-400">
+                <span className="mt-0.5 text-yellow-400 shrink-0">○</span>
+                <span>{item}</span>
+              </div>
+            ))}
           </CardContent>
         </Card>
       </div>
     </aside>
   );
 }
+
 
 function BottomNav({ activeTab, setActiveTab }: { activeTab: string; setActiveTab: (tab: string) => void }) {
   const items = [
