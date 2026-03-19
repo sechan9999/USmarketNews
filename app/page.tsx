@@ -317,9 +317,13 @@ function MobileHeader({ title, right = 'menu' }: { title: string; right?: 'menu'
 }
 
 function AskAnythingPage() {
-  const { messages, input, handleInputChange, handleSubmit, isLoading, append } = useChat({
+  const { messages, input, handleInputChange, handleSubmit, isLoading, append, error } = useChat({
     // @ts-ignore
     api: '/api/chat',
+    onError: (err: any) => {
+      console.error('Chat error:', err);
+      alert(`Chat Error: ${err.message || 'Unknown error'}`);
+    }
   }) as any;
 
   const inputValue = input || '';
@@ -336,6 +340,12 @@ function AskAnythingPage() {
       </div>
 
       <div className="mt-6 flex flex-1 flex-col justify-end xl:mt-10 mb-4 overflow-y-auto space-y-4">
+        {error && (
+          <div className="p-4 rounded-3xl bg-red-500/20 border border-red-500/50 text-red-100 text-center mb-4">
+            Error: {error.message}
+          </div>
+        )}
+        
         {!messages || messages.length === 0 ? (
           <div className="text-center my-auto w-full">
             <h1 className="text-5xl font-bold tracking-tight text-white xl:text-6xl">Ask anything.</h1>
@@ -344,13 +354,13 @@ function AskAnythingPage() {
             <div className="mt-16 flex gap-3 overflow-x-auto pb-1 justify-center max-w-full">
               <button 
                 type="button" 
-                onClick={() => append({ role: 'user', content: 'Recent US market news' })} 
+                onClick={() => append({ id: Date.now().toString(), role: 'user', content: 'Recent US market news' })} 
                 className="whitespace-nowrap rounded-full border border-white/10 bg-white/5 px-6 py-4 text-xl font-semibold text-white transition hover:bg-white/10">
                 Recent US market news
               </button>
               <button 
                 type="button" 
-                onClick={() => append({ role: 'user', content: 'Why are futures red?' })} 
+                onClick={() => append({ id: Date.now().toString(), role: 'user', content: 'Why are futures red?' })} 
                 className="whitespace-nowrap rounded-full border border-white/10 bg-white/5 px-6 py-4 text-xl font-semibold text-white/85 transition hover:bg-white/10">
                 Why are futures red?
               </button>
@@ -359,7 +369,7 @@ function AskAnythingPage() {
         ) : (
           messages.map((m: any, i: number) => (
             <div key={m.id || i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-              <div className={`p-4 rounded-3xl max-w-[85%] ${m.role === 'user' ? 'bg-white/10 text-white' : 'bg-zinc-900 border border-white/10 text-zinc-300'}`}>
+              <div className={`p-4 rounded-3xl max-w-[85%] ${m.role === 'user' ? 'bg-white/10 text-white' : 'bg-zinc-900 border border-white/10 text-zinc-300'} whitespace-pre-wrap`}>
                 {m.content}
               </div>
             </div>
@@ -376,7 +386,7 @@ function AskAnythingPage() {
         )}
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-3 shrink-0">
+      <form onSubmit={(e) => { e.preventDefault(); handleSubmit(e); }} className="space-y-3 shrink-0">
         <div className="flex items-center gap-3">
           <Button type="button" size="icon" variant="ghost" className="h-16 w-16 shrink-0 rounded-full border border-white/10 bg-white/5 text-white">
             <Paperclip className="h-6 w-6" />
