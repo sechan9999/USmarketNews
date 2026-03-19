@@ -24,9 +24,16 @@ export async function fetchNewsFromNewsAPI(): Promise<RawNews[]> {
     
     let articles: any[] = [];
     for (const r of responses) {
-      if (r.status === 'fulfilled' && r.value.ok) {
-        const data = await r.value.json();
-        articles = articles.concat(data.articles || []);
+      if (r.status === 'fulfilled') {
+        if (r.value.ok) {
+          const data = await r.value.json();
+          articles = articles.concat(data.articles || []);
+        } else {
+          const errText = await r.value.text();
+          console.error(`NewsAPI error status ${r.value.status}: ${errText}`);
+        }
+      } else {
+        console.error('NewsAPI fetch rejected:', r.reason);
       }
     }
 
@@ -40,7 +47,7 @@ export async function fetchNewsFromNewsAPI(): Promise<RawNews[]> {
       publishedAt: a.publishedAt,
     }));
   } catch (e) {
-    console.error('NewsAPI fetch error', e);
+    console.error('NewsAPI general error', e);
     return [];
   }
 }
@@ -60,9 +67,16 @@ export async function fetchNewsFromFinnhub(): Promise<RawNews[]> {
     
     let dataList: any[] = [];
     for (const r of responses) {
-      if (r.status === 'fulfilled' && r.value.ok) {
-        const data = await r.value.json();
-        dataList = dataList.concat(data.slice(0, 30));
+      if (r.status === 'fulfilled') {
+        if (r.value.ok) {
+          const data = await r.value.json();
+          dataList = dataList.concat(data.slice(0, 30));
+        } else {
+          const errText = await r.value.text();
+          console.error(`Finnhub error status ${r.value.status}: ${errText}`);
+        }
+      } else {
+        console.error('Finnhub fetch rejected:', r.reason);
       }
     }
 
