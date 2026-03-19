@@ -16,10 +16,11 @@ export async function fetchNewsFromNewsAPI(): Promise<RawNews[]> {
       url.searchParams.set('category', category);
       url.searchParams.set('pageSize', '30');
       url.searchParams.set('apiKey', process.env.NEWS_API_KEY!);
+      url.searchParams.set('_v', Date.now().toString()); // Cache buster
       return url.toString();
     });
 
-    const requests = urls.map(u => fetch(u, { next: { revalidate: 300 } }));
+    const requests = urls.map(u => fetch(u, { cache: 'no-store' }));
     const responses = await Promise.allSettled(requests);
     
     let articles: any[] = [];
@@ -59,10 +60,11 @@ export async function fetchNewsFromFinnhub(): Promise<RawNews[]> {
       const url = new URL('https://finnhub.io/api/v1/news');
       url.searchParams.set('category', cat);
       url.searchParams.set('token', process.env.FINNHUB_API_KEY!);
+      url.searchParams.set('_v', Date.now().toString()); // Cache buster
       return url.toString();
     });
 
-    const requests = urls.map(u => fetch(u, { next: { revalidate: 300 } }));
+    const requests = urls.map(u => fetch(u, { cache: 'no-store' }));
     const responses = await Promise.allSettled(requests);
     
     let dataList: any[] = [];
