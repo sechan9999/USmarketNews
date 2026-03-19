@@ -17,7 +17,13 @@ export async function GET(req: NextRequest) {
 
   if (category && category !== 'all') query = query.eq('category', category);
   if (impact && impact !== 'all') query = query.eq('impact_level', impact);
-  if (q) query = query.or(`title.ilike.%${q}%,summary.ilike.%${q}%`);
+  if (q) {
+    // Sanitize search input: strip PostgREST filter operators
+    const safeQ = q.replace(/[%_\\]/g, '').slice(0, 100);
+    if (safeQ) {
+      query = query.or(`title.ilike.%${safeQ}%,summary.ilike.%${safeQ}%`);
+    }
+  }
 
   const { data, error } = await query;
 
