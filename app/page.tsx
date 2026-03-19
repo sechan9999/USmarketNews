@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useMemo, useState } from 'react';
+import { useChat } from '@ai-sdk/react';
 import { motion } from 'framer-motion';
 import {
   Search,
@@ -315,13 +316,13 @@ function MobileHeader({ title, right = 'menu' }: { title: string; right?: 'menu'
   );
 }
 
-import { useChat } from '@ai-sdk/react';
-
 function AskAnythingPage() {
   const { messages, input, handleInputChange, handleSubmit, isLoading } = useChat({
     // @ts-ignore
     api: '/api/chat',
   }) as any;
+
+  const inputValue = input || '';
 
   return (
     <div className="mx-auto flex min-h-[calc(100vh-92px)] w-full max-w-md flex-col px-4 pt-6 pb-28 xl:min-h-0 xl:max-w-none xl:px-0 xl:pb-0">
@@ -335,23 +336,23 @@ function AskAnythingPage() {
       </div>
 
       <div className="mt-6 flex flex-1 flex-col justify-end xl:mt-10 mb-4 overflow-y-auto space-y-4">
-        {messages.length === 0 ? (
+        {!messages || messages.length === 0 ? (
           <div className="text-center my-auto w-full">
             <h1 className="text-5xl font-bold tracking-tight text-white xl:text-6xl">Ask anything.</h1>
             <p className="mt-4 text-xl text-zinc-400 xl:text-2xl">The best AI to search economic news.</p>
 
             <div className="mt-16 flex gap-3 overflow-x-auto pb-1 justify-center max-w-full">
-              <button onClick={() => handleInputChange({ target: { value: 'Recent US market news' } } as any)} className="whitespace-nowrap rounded-full border border-white/10 bg-white/5 px-6 py-4 text-xl font-semibold text-white">
+              <button type="button" onClick={() => handleInputChange({ target: { value: 'Recent US market news' } } as any)} className="whitespace-nowrap rounded-full border border-white/10 bg-white/5 px-6 py-4 text-xl font-semibold text-white">
                 Recent US market news
               </button>
-              <button onClick={() => handleInputChange({ target: { value: 'Why are futures red?' } } as any)} className="whitespace-nowrap rounded-full border border-white/10 bg-white/5 px-6 py-4 text-xl font-semibold text-white/85">
+              <button type="button" onClick={() => handleInputChange({ target: { value: 'Why are futures red?' } } as any)} className="whitespace-nowrap rounded-full border border-white/10 bg-white/5 px-6 py-4 text-xl font-semibold text-white/85">
                 Why are futures red?
               </button>
             </div>
           </div>
         ) : (
-          messages.map((m: any) => (
-            <div key={m.id} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+          messages.map((m: any, i: number) => (
+            <div key={m.id || i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
               <div className={`p-4 rounded-3xl max-w-[85%] ${m.role === 'user' ? 'bg-white/10 text-white' : 'bg-zinc-900 border border-white/10 text-zinc-300'}`}>
                 {m.content}
               </div>
@@ -376,12 +377,12 @@ function AskAnythingPage() {
           </Button>
           <div className="flex h-16 flex-1 items-center rounded-full border border-white/10 bg-white/5 px-5">
             <input
-              value={input}
+              value={inputValue}
               onChange={handleInputChange}
               className="bg-transparent text-xl text-white outline-none w-full placeholder:text-zinc-500"
               placeholder="Ask anything..."
             />
-            <button type="submit" className="ml-auto flex h-11 w-11 items-center justify-center rounded-full bg-white text-black shrink-0 disabled:opacity-50" disabled={isLoading || !input.trim()}>
+            <button type="submit" className="ml-auto flex h-11 w-11 items-center justify-center rounded-full bg-white text-black shrink-0 disabled:opacity-50" disabled={isLoading || !inputValue.trim()}>
               <ArrowUp className="h-5 w-5" />
             </button>
           </div>
