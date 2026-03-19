@@ -1047,7 +1047,17 @@ export default function HkMarketNewsApp() {
       .then((data) => {
         if (data.data && data.data.length > 0) {
           // Normalize API shape to topNews shape
-          const incomingNews = data.data.map((item: any) => ({
+          const incomingNews = data.data.map((item: {
+            id: string;
+            source: string;
+            published_at: string;
+            category: string;
+            impact_level: string;
+            title: string;
+            summary: string;
+            tickers: string[];
+            url: string;
+          }) => ({
              id: item.id,
              source: item.source,
              time: new Date(item.published_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }),
