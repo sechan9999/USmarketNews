@@ -1018,7 +1018,11 @@ function SettingsPage() {
       }
       
       if (res.ok && data?.ok) {
-        alert(`Success! Fetched ${data.inserted} news items.`);
+        if (data.inserted > 0) {
+          alert(`Success! Handled ${data.inserted} news items.`);
+        } else {
+          alert(`Finished. 0 new items. (Sources: NewsAPI ${data.newsAPI || 0}, Finnhub ${data.finnhub || 0})`);
+        }
       } else {
         alert(`Error: ${data?.error || 'Unknown error. Check Vercel logs/keys.'}`);
       }
