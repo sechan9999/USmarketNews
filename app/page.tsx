@@ -811,11 +811,20 @@ function SettingsPage() {
     setSyncing(true);
     try {
       const res = await fetch('/api/ingest-news');
-      const data = await res.json();
-      if (data.ok) alert(`Success! Fetched ${data.inserted} news items.`);
-      else alert(`Error: ${data.error}`);
-    } catch (e) {
-      alert('Failed to trigger sync.');
+      let data;
+      try {
+        data = await res.json();
+      } catch (parseError) {
+        throw new Error('Server returned an invalid response (not JSON). Did you add API keys to Vercel?');
+      }
+      
+      if (res.ok && data?.ok) {
+        alert(`Success! Fetched ${data.inserted} news items.`);
+      } else {
+        alert(`Error: ${data?.error || 'Unknown error. Check Vercel logs/keys.'}`);
+      }
+    } catch (e: any) {
+      alert(`Failed to trigger sync: ${e.message}`);
     } finally {
       setSyncing(false);
     }
