@@ -1,6 +1,5 @@
 -- HK.ai Market News — Supabase Schema
--- Run this in the Supabase SQL Editor.
--- Safe to re-run (all statements are idempotent).
+-- Safe to re-run. No data is dropped. Only creates what doesn't exist.
 
 -- news_items table
 CREATE TABLE IF NOT EXISTS news_items (
@@ -27,12 +26,21 @@ CREATE INDEX IF NOT EXISTS idx_news_items_impact_level ON news_items(impact_leve
 -- Row Level Security
 ALTER TABLE news_items ENABLE ROW LEVEL SECURITY;
 
--- Drop existing policies first (prevents 42710 duplicate error on re-run)
-DROP POLICY IF EXISTS "Allow public read access" ON news_items;
-DROP POLICY IF EXISTS "Allow service role insert" ON news_items;
+-- Create policies only if they don't already exist (no DROP, no warnings)
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE tablename = 'news_items' AND policyname = 'Allow public read access'
+  ) THEN
+    CREATE POLICY "Allow public read access" ON news_items FOR SELECT USING (true);
+  END IF;
 
--- Public read (frontend news feed)
-CREATE POLICY "Allow public read access" ON news_items FOR SELECT USING (true);
-
--- Service role write (ingestion engine)
-CREATE POLICY "Allow service role insert" ON news_items FOR ALL USING (true) WITH CHECK (true);
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE tablename = 'news_items' AND policyname = 'Allow service role insert'
+  ) THEN
+    CREATE POLICY "Allow service role insert" ON news_items FOR ALL USING (true) WITH CHECK (true);
+  END IF;
+END
+$$;
