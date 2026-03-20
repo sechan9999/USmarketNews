@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useRef, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
+import { sanitizeHtml } from '@/lib/sanitize';
 import {
   Search,
   Bookmark,
@@ -572,9 +573,9 @@ function NewsPage({
                   </div>
 
                   <h2 className="text-2xl font-semibold leading-tight tracking-tight">{item.title}</h2>
-                  <div 
+                  <div
                     className="mt-3 text-sm leading-6 text-zinc-300 [&_ul]:list-disc [&_ul]:pl-5 [&_li]:mb-1 [&_a]:text-blue-400 [&_a:hover]:underline"
-                    dangerouslySetInnerHTML={{ __html: item.summary }}
+                    dangerouslySetInnerHTML={{ __html: sanitizeHtml(item.summary ?? '') }}
                   />
 
                   <div className="mt-4 flex flex-wrap items-center gap-2">
@@ -877,14 +878,14 @@ function IndexPage() {
   const accentClass = value <= 25 ? 'text-rose-500' : value <= 45 ? 'text-orange-400' : value >= 75 ? 'text-green-400' : value >= 55 ? 'text-green-400' : 'text-yellow-500';
   const barClass = value <= 25 ? 'bg-rose-500' : value <= 45 ? 'bg-orange-400' : value >= 75 ? 'bg-green-400' : value >= 55 ? 'bg-green-400' : 'bg-yellow-400';
 
-  // Breakdown indicators (derived from index value with slight variation)
-  const indicators = [
-    { label: 'Market Momentum', score: Math.max(0, Math.min(100, value + Math.round(Math.random() * 10 - 5))), },
-    { label: 'Stock Price Strength', score: Math.max(0, Math.min(100, value + Math.round(Math.random() * 10 - 5))), },
-    { label: 'Safe Haven Demand', score: Math.max(0, Math.min(100, 100 - value + Math.round(Math.random() * 10 - 5))), },
-    { label: 'VIX Volatility', score: Math.max(0, Math.min(100, 100 - value + Math.round(Math.random() * 10 - 5))), },
-    { label: 'Market Breadth', score: Math.max(0, Math.min(100, value + Math.round(Math.random() * 10 - 5))), },
-  ];
+  // Breakdown indicators derived deterministically from the index value
+  const indicators = React.useMemo(() => [
+    { label: 'Market Momentum', score: Math.max(0, Math.min(100, value + 3)) },
+    { label: 'Stock Price Strength', score: Math.max(0, Math.min(100, value - 2)) },
+    { label: 'Safe Haven Demand', score: Math.max(0, Math.min(100, 100 - value + 4)) },
+    { label: 'VIX Volatility', score: Math.max(0, Math.min(100, 100 - value - 1)) },
+    { label: 'Market Breadth', score: Math.max(0, Math.min(100, value + 1)) },
+  ], [value]);
 
   const indicatorLabel = (s: number) => s <= 25 ? 'Extreme Fear' : s <= 45 ? 'Fear' : s >= 75 ? 'Extreme Greed' : s >= 55 ? 'Greed' : 'Neutral';
   const indicatorClass = (s: number) => s <= 45 ? 'text-rose-400' : s >= 55 ? 'text-green-400' : 'text-yellow-400';
@@ -1259,48 +1260,60 @@ export default function HkMarketNewsApp() {
   const [activeCategory, setActiveCategory] = useState<string>('live');
   const [activeSeverity, setActiveSeverity] = useState<string | null>(null);
   const [query, setQuery] = useState('');
-  
-  const [newsCache, setNewsCache] = useState<any[]>(topNews);
-  
-  // Actually fetch from backend using selected filters
+  const [debouncedQuery, setDebouncedQuery] = useState('');
+
+  const [newsCache, setNewsCache] = useState<any[]>([]);
+  const [newsLoading, setNewsLoading] = useState(true);
+
+  // Debounce search input (300ms)
   React.useEffect(() => {
+    const timer = setTimeout(() => setDebouncedQuery(query), 300);
+    return () => clearTimeout(timer);
+  }, [query]);
+
+  // Fetch from backend using selected filters
+  React.useEffect(() => {
+    const controller = new AbortController();
+    setNewsLoading(true);
+
     let url = `/api/news?category=${activeCategory === 'live' ? 'all' : activeCategory}`;
     if (activeSeverity) url += `&impact=${activeSeverity}`;
-    if (query) url += `&q=${encodeURIComponent(query)}`;
-    
-    fetch(url)
+    if (debouncedQuery) url += `&q=${encodeURIComponent(debouncedQuery)}`;
+
+    fetch(url, { signal: controller.signal })
       .then((res) => res.json())
       .then((data) => {
-        if (data.data && data.data.length > 0) {
-          // Normalize API shape to topNews shape
-          const incomingNews = data.data.map((item: {
-            id: string;
-            source: string;
-            published_at: string;
-            category: string;
-            impact_level: string;
-            title: string;
-            summary: string;
-            tickers: string[];
-            url: string;
-          }) => ({
-             id: item.id,
-             source: item.source,
-             time: new Date(item.published_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }),
-             category: item.category,
-             severity: item.impact_level,
-             title: item.title,
-             summary: item.summary,
-             impact: Array.isArray(item.tickers) ? item.tickers : [],
-             url: item.url
-          }));
-          setNewsCache(incomingNews);
-        } else {
-          setNewsCache([]); // Show empty state when no items matching DB exist
-        }
+        const items = data.data ?? [];
+        const incomingNews = items.map((item: {
+          id: string;
+          source: string;
+          published_at: string;
+          category: string;
+          impact_level: string;
+          title: string;
+          summary: string;
+          tickers: string[];
+          url: string;
+        }) => ({
+           id: item.id,
+           source: item.source,
+           time: new Date(item.published_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }),
+           category: item.category,
+           severity: item.impact_level,
+           title: item.title,
+           summary: item.summary,
+           impact: Array.isArray(item.tickers) ? item.tickers : [],
+           url: item.url
+        }));
+        setNewsCache(incomingNews);
       })
-      .catch((e) => console.error(e));
-  }, [activeCategory, activeSeverity, query]);
+      .catch((e) => {
+        if (e.name !== 'AbortError') console.error(e);
+      })
+      .finally(() => setNewsLoading(false));
+
+    return () => controller.abort();
+  }, [activeCategory, activeSeverity, debouncedQuery]);
 
   const filteredNews = newsCache;
 

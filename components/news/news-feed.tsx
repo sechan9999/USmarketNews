@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { NewsCard } from './news-card';
 import type { NewsItem } from '@/lib/types';
 
@@ -9,20 +9,36 @@ export function NewsFeed() {
   const [category, setCategory] = useState('all');
   const [impact, setImpact] = useState('all');
   const [query, setQuery] = useState('');
+  const [debouncedQuery, setDebouncedQuery] = useState('');
   const [loading, setLoading] = useState(true);
 
+  // Debounce search
   useEffect(() => {
+    const timer = setTimeout(() => setDebouncedQuery(query), 300);
+    return () => clearTimeout(timer);
+  }, [query]);
+
+  const fetchNews = useCallback(async () => {
+    setLoading(true);
     const params = new URLSearchParams();
     if (category !== 'all') params.set('category', category);
     if (impact !== 'all') params.set('impact', impact);
-    if (query) params.set('q', query);
+    if (debouncedQuery) params.set('q', debouncedQuery);
 
-    setLoading(true);
-    fetch(`/api/news?${params.toString()}`)
-      .then((res) => res.json())
-      .then((json) => setItems(json.data ?? []))
-      .finally(() => setLoading(false));
-  }, [category, impact, query]);
+    try {
+      const res = await fetch(`/api/news?${params.toString()}`);
+      const json = await res.json();
+      setItems(json.data ?? []);
+    } catch {
+      // Silently handle fetch errors
+    } finally {
+      setLoading(false);
+    }
+  }, [category, impact, debouncedQuery]);
+
+  useEffect(() => {
+    fetchNews();
+  }, [fetchNews]);
 
   return (
     <div className="space-y-4">
